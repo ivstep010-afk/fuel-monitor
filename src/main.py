@@ -26,12 +26,12 @@ def read_input(prompt: str, default: str = "") -> str:
 
 def select_city() -> CityConfig:
     """Интерактивный выбор города."""
-    city_name = os.getenv("APP_CITY", "").strip().lower()
+    city_name = settings.target_city.strip().casefold()
     if not sys.stdin.isatty():
         for key, city in CITIES.items():
-            if city_name in (key.lower(), city.name.lower()):
+            if city_name in (key.casefold(), city.name.casefold()):
                 return city
-        return next(iter(CITIES.values()))
+        return settings.city or CITIES["cheboksary"]
 
     print("\n📍 Выберите город:")
     print("-" * 40)
@@ -301,7 +301,7 @@ def main():
         except ValueError:
             interval = 300
         
-        collector = RawCSVCollector()
+        collector = RawCSVCollector(settings.raw_data_path)
         print(f"\n🚀 Запуск сбора сырых данных для г. {city.name} каждые {interval} сек.")
         print("📁 Данные сохраняются в data/stations_raw.csv")
         print("🛑 Для остановки нажмите Ctrl+C\n")

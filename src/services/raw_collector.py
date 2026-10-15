@@ -2,14 +2,14 @@ import csv
 import os
 from datetime import datetime
 from typing import List
-from src.config.settings import CityConfig, StationFilter
+from src.config.settings import CityConfig, StationFilter, settings
 from src.api.client import SyncGdeBenzClient
 from src.models.station import Station
 
 class RawCSVCollector:
     """Сборщик сырых данных по заправкам в CSV файл."""
-    def __init__(self, filename: str = "data/stations_raw.csv"):
-        self.filename = filename
+    def __init__(self, filename: str = None):
+        self.filename = filename or settings.raw_data_path
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
         self._init_file()
 

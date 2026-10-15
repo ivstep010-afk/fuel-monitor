@@ -30,8 +30,10 @@ CITIES = {
     "kazan": CityConfig("Казань", 55.79, 49.11, 20.0),
     "ekb": CityConfig("Екатеринбург", 56.84, 60.60, 20.0),
     "nsk": CityConfig("Новосибирск", 55.01, 82.93, 20.0),
-    "cheboksary": CityConfig("Чебоксары", 56.13, 47.25, 20.0),
+    "cheboksary": CityConfig("Чебоксары", 56.1322, 47.2519, 20.0),
 }
+
+DEFAULT_CITY_NAME = os.getenv("CITY") or os.getenv("TARGET_CITY") or "Чебоксары"
 
 
 @dataclass
@@ -40,8 +42,10 @@ class Settings:
     # API
     api_base_url: str = "https://gdebenz.ru/api"
     request_timeout: int = 30
-    update_interval_seconds: int = 300  # 5 минут
+    update_interval_seconds: int = 600  # 10 минут
     app_mode: str = "2"
+    target_city: str = DEFAULT_CITY_NAME
+    raw_data_path: str = "data/stations_raw.csv"
     
     # Город и фильтры (будут заполнены при запуске)
     city: Optional[CityConfig] = None
@@ -66,10 +70,21 @@ def load_settings() -> Settings:
     
     # Можно расширить загрузку из .env файла
     if os.getenv("GDEBENZ_UPDATE_INTERVAL"):
-        settings.update_interval_seconds = int(os.getenv("GDEBENZ_UPDATE_INTERVAL", "300"))
+        settings.update_interval_seconds = int(os.getenv("GDEBENZ_UPDATE_INTERVAL", "600"))
     
     if os.getenv("GDEBENZ_API_URL"):
         settings.api_base_url = os.getenv("GDEBENZ_API_URL", "https://gdebenz.ru/api")
+
+    settings.target_city = os.getenv("CITY") or os.getenv("TARGET_CITY") or "Чебоксары"
+    settings.raw_data_path = os.getenv("RAW_DATA_PATH", "data/stations_raw.csv")
+    configured_city = settings.target_city.casefold()
+    settings.city = next(
+        (
+            city for key, city in CITIES.items()
+            if key.casefold() == configured_city or city.name.casefold() == configured_city
+        ),
+        CITIES["cheboksary"],
+    )
 
     configured_mode = os.getenv("APP_MODE", os.getenv("MODE", "2")).strip()
     settings.app_mode = configured_mode if configured_mode in {"1", "2"} else "2"
