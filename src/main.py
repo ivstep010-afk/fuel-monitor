@@ -1,5 +1,6 @@
 """Интерактивная настройка и запуск монитора."""
 import asyncio
+import os
 import sys
 from typing import List, Optional
 
@@ -10,12 +11,28 @@ from src.services.monitor import SyncStationMonitor, FuelChange
 from src.notifications.console import ConsoleNotifier
 from src.notifications.telegram import TelegramNotifier
 from src.notifications.base import CompositeNotificationProvider
-from src.services.csv_logger import CSVLogger
 from src.services.raw_collector import RawCSVCollector
 import time
 
+
+def read_input(prompt: str, default: str = "") -> str:
+    """Read input only from an interactive terminal, with a safe fallback."""
+    if not sys.stdin.isatty():
+        return default
+    try:
+        return input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        return default
+
 def select_city() -> CityConfig:
     """Интерактивный выбор города."""
+    city_name = os.getenv("APP_CITY", "").strip().lower()
+    if not sys.stdin.isatty():
+        for key, city in CITIES.items():
+            if city_name in (key.lower(), city.name.lower()):
+                return city
+        return next(iter(CITIES.values()))
+
     print("\n📍 Выберите город:")
     print("-" * 40)
     
@@ -27,7 +44,7 @@ def select_city() -> CityConfig:
     
     while True:
         try:
-            choice = input(f"\nВаш выбор (1-{len(city_list) + 1}): ").strip()
+            choice = read_input(f"\nВаш выбор (1-{len(city_list) + 1}): ", "1")
             idx = int(choice) - 1
             
             if 0 <= idx < len(city_list):
@@ -48,13 +65,13 @@ def input_custom_city() -> CityConfig:
     print("\n📍 Ввод пользовательского города:")
     print("-" * 40)
     
-    name = input("Название города: ").strip() or "Пользовательский"
+    name = read_input("Название города: ", "Пользовательский") or "Пользовательский"
     
     while True:
         try:
-            lat = float(input("Широта (lat): ").strip())
-            lon = float(input("Долгота (lon): ").strip())
-            radius = float(input("Радиус поиска (км, по умолчанию 20): ").strip() or "20")
+            lat = float(read_input("Широта (lat): ", "0"))
+            lon = float(read_input("Долгота (lon): ", "0"))
+            radius = float(read_input("Радиус поиска (км, по умолчанию 20): ", "20") or "20")
             break
         except ValueError:
             print("❌ Введите корректные числа")
@@ -64,6 +81,8 @@ def input_custom_city() -> CityConfig:
 
 def select_brands(available_brands: List[str]) -> List[str]:
     """Интерактивный выбор предпочитаемых брендов."""
+    if not sys.stdin.isatty():
+        return []
     print("\n⛽ Выберите предпочитаемые бренды заправок:")
     print("-" * 40)
     print("  Доступные бренды:")
@@ -76,7 +95,7 @@ def select_brands(available_brands: List[str]) -> List[str]:
     
     while True:
         try:
-            choice = input("\nВаш выбор: ").strip()
+            choice = read_input("\nВаш выбор: ", "")
             
             if not choice:
                 return []
@@ -101,6 +120,8 @@ def select_brands(available_brands: List[str]) -> List[str]:
 
 def select_fuels() -> List[str]:
     """Интерактивный выбор типов топлива."""
+    if not sys.stdin.isatty():
+        return []
     fuel_types = ["92", "95", "95+", "98", "100", "ДТ"]
     
     print("\n⛽ Выберите типы топлива для отслеживания:")
@@ -114,7 +135,7 @@ def select_fuels() -> List[str]:
     
     while True:
         try:
-            choice = input("\nВаш выбор: ").strip()
+            choice = read_input("\nВаш выбор: ", "")
             
             if not choice:
                 return []
@@ -141,12 +162,10 @@ def setup_notifications() -> CompositeNotificationProvider:
     """Настройка провайдеров уведомлений."""
     providers = []
     
-    # Всегда добавляем консоль и CSV логгер
+    # RawCSVCollector is used by the raw-data mode; no history logger is needed.
     providers.append(ConsoleNotifier(verbose=True))
-    providers.append(CSVLogger())
     
     # Проверяем настройки Telegram
-    import os
     if os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID"):
         print("\n📱 Найдены настройки Telegram, добавляю уведомления...")
         providers.append(TelegramNotifier())
@@ -218,11 +237,17 @@ def main():
     print("  🛢️  GdeBenz Monitor - Мониторинг заправок")
     print("=" * 60)
     
-    print("\nВыберите режим работы:")
-    print("  1. Мониторинг изменений (с уведомлениями)")
-    print("  2. Сбор сырых данных в CSV (без уведомлений)")
+    if sys.stdin.isatty():
+        print("\nВыберите режим работы:")
+        print("  1. Мониторинг изменений (с уведомлениями)")
+        print("  2. Сбор сырых данных в CSV (без уведомлений)")
     
-    mode = input("\nВаш выбор (1-2): ").strip()
+    configured_mode = os.getenv("APP_MODE", os.getenv("MODE", settings.app_mode)).strip()
+    mode = configured_mode if configured_mode in {"1", "2"} else "2"
+    if sys.stdin.isatty():
+        mode = read_input("\nВаш выбор (1-2): ", mode)
+        if mode not in {"1", "2"}:
+            mode = "2"
     
     # 1. Выбор города (общий для обоих режимов)
     city = select_city()
@@ -243,7 +268,7 @@ def main():
         notifier = setup_notifications()
         
         print("\n⏱️ Интервал проверки (секунды, по умолчанию 300 = 5 мин):")
-        interval_input = input("Интервал: ").strip()
+        interval_input = read_input("Интервал: ", str(settings.update_interval_seconds))
         try:
             interval = int(interval_input) if interval_input else 300
         except ValueError:
@@ -270,7 +295,7 @@ def main():
         client = SyncGdeBenzClient()
         
         print("\n⏱️ Интервал между сборами (секунды, по умолчанию 300 = 5 мин):")
-        interval_input = input("Интервал (сек): ").strip()
+        interval_input = read_input("Интервал (сек): ", str(settings.update_interval_seconds))
         try:
             interval = int(interval_input) if interval_input else 300
         except ValueError:

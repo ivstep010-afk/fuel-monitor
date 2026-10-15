@@ -41,6 +41,7 @@ class Settings:
     api_base_url: str = "https://gdebenz.ru/api"
     request_timeout: int = 30
     update_interval_seconds: int = 300  # 5 минут
+    app_mode: str = "2"
     
     # Город и фильтры (будут заполнены при запуске)
     city: Optional[CityConfig] = None
@@ -69,6 +70,9 @@ def load_settings() -> Settings:
     
     if os.getenv("GDEBENZ_API_URL"):
         settings.api_base_url = os.getenv("GDEBENZ_API_URL", "https://gdebenz.ru/api")
+
+    configured_mode = os.getenv("APP_MODE", os.getenv("MODE", "2")).strip()
+    settings.app_mode = configured_mode if configured_mode in {"1", "2"} else "2"
     
     return settings
 
